@@ -1,8 +1,52 @@
-import { CircleAlert, SendHorizonal, MoveRight } from "lucide-react";
+import { useState } from "react";
+import { CircleAlert, SendHorizontal, MoveRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import chatbotIcon from "../assets/chatbot-icon.png";
+import { askChat } from "../services/chat";
+
+const INITIAL_MESSAGE = {
+    role: "assistant",
+    content: "Hi, I'm Agos. I can help with flood safety, disaster preparedness, evacuation planning, and other DRRM concerns. What do you need help with?",
+};
+
+const QUICK_PROMPTS = [
+    "What should I prepare before heavy rain?",
+    "What should I do if floodwater is rising?",
+];
 
 function ChatbotWindow() {
+    const [messages, setMessages] = useState([INITIAL_MESSAGE]);
+    const [input, setInput] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    async function handleSubmit(event, prompt = input) {
+        event?.preventDefault();
+        const text = prompt.trim();
+
+        if (!text || isLoading) return;
+
+        const userMessage = { role: "user", content: text };
+        const conversation = [...messages, userMessage];
+
+        setMessages(conversation);
+        setInput("");
+        setError("");
+        setIsLoading(true);
+
+        try {
+            const result = await askChat(conversation);
+            setMessages((currentMessages) => [
+                ...currentMessages,
+                { role: "assistant", content: result.reply, provider: result.provider },
+            ]);
+        } catch (requestError) {
+            setError(requestError.message);
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
     return (
         <section
             className="
@@ -35,15 +79,60 @@ function ChatbotWindow() {
             </header>
 
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4">
-                <p>Hi, I'm Agos</p>
-                <p>How can I help you today?</p>
+            <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
+                {messages.map((message, index) => (
+                    <div
+                        key={`${message.role}-${index}`}
+                        className={`max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
+                            message.role === "user"
+                                ? "ml-auto bg-primary text-white"
+                                : "bg-white text-text shadow-card"
+                        }`}
+                    >
+                        {message.content}
+                        {message.provider && message.provider !== "local-safety-guide" && (
+                            <span className="mt-1 block text-[10px] opacity-60">
+                                via {message.provider}
+                            </span>
+                        )}
+                    </div>
+                ))}
+
+                {isLoading && (
+                    <div className="max-w-[85%] rounded-lg bg-white px-3 py-2 text-sm text-text shadow-card">
+                        Agos is checking that for you...
+                    </div>
+                )}
+
+                {messages.length === 1 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                        {QUICK_PROMPTS.map((prompt) => (
+                            <button
+                                key={prompt}
+                                type="button"
+                                onClick={(event) => handleSubmit(event, prompt)}
+                                className="rounded-full border border-primary/40 bg-white px-3 py-2 text-left text-xs text-primary hover:bg-primary/10"
+                            >
+                                {prompt}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {error && (
+                    <p className="rounded-lg bg-red-100 p-3 text-sm text-red-700">
+                        {error}
+                    </p>
+                )}
             </div>
 
             {/* Message Input */}
-            <form className="flex shrink-0 gap-2 border-t p-2">
+            <form className="flex shrink-0 gap-2 border-t p-2" onSubmit={handleSubmit}>
                 <input
                     type="text" id="chat-input"
+                    value={input}
+                    onChange={(event) => setInput(event.target.value)}
+                    disabled={isLoading}
                     placeholder="Type a message..."
                     className="
                         min-w-0
@@ -60,6 +149,7 @@ function ChatbotWindow() {
                 <button
                     type="submit"
                     aria-label="Send message"
+                    disabled={isLoading || !input.trim()}
                     className="
                         flex
                         shrink-0
@@ -72,7 +162,7 @@ function ChatbotWindow() {
                         hover:bg-primary/10
                     "
                 >
-                    <SendHorizonal className="h-5 w-5" />
+                    <SendHorizontal className="h-5 w-5" />
                 </button>
             </form>
 
